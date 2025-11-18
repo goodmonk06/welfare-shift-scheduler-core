@@ -1,30 +1,289 @@
 # welfare-shift-scheduler-core
 
-介護・福祉事業所向けのシフト自動生成エンジン。制約条件・ロール・勤務パターンを定義して最適化するコアライブラリ。
+介護・福祉事業所向けのシフト自動生成エンジン - REST API + コアライブラリ
 
-## 特徴
+## Overview（概要）
 
-- 日本の介護施設に特化したシフトタイプ（早番、日勤A/B、遅番、夜勤入り/明けなど）
-- ハード制約とソフト制約の柔軟な定義
-- 拡張可能なソルバーインターフェース
-- TypeScriptによる型安全な実装
-- インメモリ動作でDBレスで利用可能
+このプロジェクトは、日本の介護施設における複雑なシフト作成を自動化するためのシステムです。従業員のスキル、希望休、労働基準法の遵守など、多数の制約条件を考慮しながら、最適なシフトスケジュールを生成します。
 
-## Tech Stack
+**Phase 2完了:** 完全に動作するREST API、テストスイート、Docker環境を実装しました。
 
+### Key Features（主な特徴）
+
+- ✅ 日本の介護施設に特化したシフトタイプ（早番、日勤A/B、遅番、夜勤入り/明けなど）
+- ✅ ハード制約（6種類）とソフト制約（5種類）による柔軟なスケジュール最適化
+- ✅ REST API による外部システムとの統合
+- ✅ Zod によるエンドツーエンドの型安全性とバリデーション
+- ✅ 拡張可能なソルバーインターフェース
+- ✅ インメモリ動作（将来的にPostgreSQL対応予定）
+- ✅ Vitest によるテストカバレッジ
+- ✅ Docker 対応で簡単にデプロイ可能
+
+## Tech Stack（技術スタック）
+
+**Backend:**
 - Node.js 20+
 - TypeScript 5.3+
-- 将来的にOR-Toolsなどの制約ソルバーと統合可能
+- Express.js (REST API)
+- Zod (バリデーション)
 
-## インストール
+**Testing:**
+- Vitest (テストフレームワーク)
 
-```bash
-npm install welfare-shift-scheduler-core
+**Infrastructure:**
+- Docker & Docker Compose
+- (将来) PostgreSQL
+
+**Solver:**
+- NaiveSolver (ヒューリスティック実装)
+- (将来) OR-Tools統合予定
+
+## Domain Model Summary（ドメインモデル概要）
+
+### 主要エンティティ
+
+1. **Employee（従業員）**
+   - 基本情報、職種、スキル
+   - 勤務制限（最大/最小シフト数、連続勤務日数）
+   - 希望休・勤務不可日
+
+2. **ShiftType（シフトタイプ）**
+   - 早番 (07:00-16:00)
+   - 日勤A (08:30-17:30)
+   - 日勤B (09:00-18:00)
+   - 遅番 (11:00-20:00)
+   - 夜勤入り (16:00-翌10:00)
+   - 夜勤明け (10:00-12:00)
+   - 休み
+
+3. **Schedule（スケジュール）**
+   - 月次のシフト割り当て
+   - 制約違反数と満足度スコア
+   - メタデータ（生成時間など）
+
+4. **Constraints（制約）**
+   - **ハード制約**: 二重予約禁止、夜勤明け後勤務禁止、勤務不可日遵守など
+   - **ソフト制約**: 希望休考慮、夜勤公平配分、連続勤務回避など
+
+### アーキテクチャ
+
+```
+src/
+├── domain/           # ドメインモデル
+│   ├── Employee.ts
+│   ├── Role.ts
+│   ├── ShiftType.ts
+│   └── ShiftAssignment.ts
+├── constraints/      # 制約定義
+│   ├── hardConstraints.ts
+│   └── softConstraints.ts
+├── solver/           # ソルバー実装
+│   ├── types.ts
+│   └── NaiveSolver.ts
+├── api/              # REST API
+│   ├── server.ts
+│   ├── routes/
+│   ├── schemas.ts    # Zodバリデーション
+│   ├── storage.ts    # インメモリストレージ
+│   └── middleware.ts
+├── examples/         # サンプル実装
+└── index.ts          # ライブラリエントリーポイント
 ```
 
-## クイックスタート
+## Getting Started
 
-### 基本的な使い方
+### Requirements（前提条件）
+
+- Node.js 20以上
+- npm または yarn
+- (オプション) Docker & Docker Compose
+
+### Setup Steps（セットアップ手順）
+
+#### 1. リポジトリのクローンと依存関係のインストール
+
+```bash
+# クローン
+git clone <repository-url>
+cd welfare-shift-scheduler-core
+
+# 依存関係のインストール
+npm install
+
+# 環境変数の設定
+cp .env.example .env
+```
+
+#### 2. オプションA: ローカル開発
+
+```bash
+# Seed データの投入（デモ用の従業員6名を登録）
+npm run seed
+
+# 開発サーバーの起動（ホットリロード対応）
+npm run dev
+```
+
+サーバーが起動したら、ブラウザで http://localhost:3000 を開いて動作確認できます。
+
+#### 2. オプションB: Docker で起動
+
+```bash
+# Dockerイメージのビルドと起動
+docker compose up --build
+
+# またはバックグラウンドで起動
+docker compose up -d
+```
+
+### デモフローの実行
+
+#### Step 1: ヘルスチェック
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+**レスポンス例:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-01-18T00:00:00.000Z",
+  "uptime": 123.456,
+  "storage": {
+    "employeeCount": 6,
+    "scheduleCount": 0
+  }
+}
+```
+
+#### Step 2: 従業員一覧の取得
+
+```bash
+curl http://localhost:3000/api/employees
+```
+
+**レスポンス例:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "E001",
+      "name": "佐藤 太郎",
+      "role": "CARE_WORKER",
+      "skills": ["CARE_SKILLS", "NIGHT_SHIFT_CAPABLE"],
+      ...
+    },
+    ...
+  ],
+  "count": 6
+}
+```
+
+#### Step 3: スケジュールの生成
+
+```bash
+curl -X POST http://localhost:3000/api/schedules/generate \
+  -H "Content-Type: application/json" \
+  -d '{"yearMonth": "2025-01"}'
+```
+
+**レスポンス例:**
+```json
+{
+  "success": true,
+  "data": {
+    "schedule": {
+      "yearMonth": "2025-01",
+      "assignments": [...],
+      "generatedAt": "2025-01-18T00:00:00.000Z",
+      "metadata": {
+        "generationTimeMs": 127
+      }
+    },
+    "feasible": true,
+    "totalViolations": 3,
+    "overallScore": 85.2
+  },
+  "message": "Schedule generated successfully"
+}
+```
+
+#### Step 4: 生成したスケジュールの取得
+
+```bash
+curl http://localhost:3000/api/schedules/2025-01
+```
+
+## API Reference
+
+### Endpoints
+
+#### Employee Management
+
+```
+GET    /api/employees           - 従業員一覧取得
+GET    /api/employees/:id       - 従業員詳細取得
+POST   /api/employees           - 従業員作成
+PUT    /api/employees/:id       - 従業員更新
+DELETE /api/employees/:id       - 従業員削除
+```
+
+#### Schedule Management
+
+```
+POST   /api/schedules/generate  - スケジュール生成
+GET    /api/schedules           - スケジュール一覧取得
+GET    /api/schedules/:yearMonth - スケジュール詳細取得
+DELETE /api/schedules/:yearMonth - スケジュール削除
+```
+
+#### Health Check
+
+```
+GET    /api/health              - ヘルスチェック
+```
+
+### リクエスト例
+
+#### 従業員の作成
+
+```bash
+curl -X POST http://localhost:3000/api/employees \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "E007",
+    "name": "新規 従業員",
+    "role": "CARE_WORKER",
+    "skills": ["CARE_SKILLS"],
+    "employmentType": "PART_TIME",
+    "maxShiftsPerMonth": 15,
+    "minShiftsPerMonth": 12,
+    "maxConsecutiveWorkDays": 5,
+    "maxWeeklyHours": 30,
+    "maxMonthlyHours": 120,
+    "preferences": [],
+    "unavailableDates": []
+  }'
+```
+
+## テストの実行
+
+```bash
+# テスト実行
+npm test
+
+# テスト（UIモード）
+npm run test:ui
+
+# カバレッジ付きテスト
+npm run test:coverage
+```
+
+## プログラム的な使用方法
+
+ライブラリとしても使用できます。
 
 ```typescript
 import {
@@ -35,7 +294,6 @@ import {
   EmploymentType,
 } from 'welfare-shift-scheduler-core';
 
-// 従業員データの準備
 const employees: Employee[] = [
   {
     id: 'E001',
@@ -58,104 +316,21 @@ const employees: Employee[] = [
   // ... 他の従業員
 ];
 
-// スケジュール生成
 const result = await generateSchedule({
   yearMonth: '2025-01',
   employees,
 });
 
-// 結果の確認
 console.log(`実行可能: ${result.feasible}`);
 console.log(`満足度スコア: ${result.overallScore.toFixed(2)}`);
 console.log(`違反数: ${result.totalViolations}`);
-
-// 生成されたスケジュールの利用
-const schedule = result.schedule;
-schedule.assignments.forEach(assignment => {
-  console.log(`${assignment.date}: ${assignment.employeeId} -> ${assignment.shiftTypeId}`);
-});
 ```
 
-### カスタム制約の利用
-
-```typescript
-import {
-  NaiveSolver,
-  getAllHardConstraints,
-  getAllSoftConstraints,
-  STANDARD_SHIFT_TYPES,
-} from 'welfare-shift-scheduler-core';
-
-const solver = new NaiveSolver();
-
-const result = await solver.generateSchedule({
-  yearMonth: '2025-01',
-  employees: employees,
-  shiftTypes: Object.values(STANDARD_SHIFT_TYPES),
-  hardConstraints: getAllHardConstraints(),
-  softConstraints: getAllSoftConstraints(),
-  timeoutMs: 30000,
-});
-```
-
-## アーキテクチャ
-
-```
-src/
-├── domain/           # ドメインモデル
-│   ├── Employee.ts       # 従業員モデル
-│   ├── Role.ts           # 職種・スキル定義
-│   ├── ShiftType.ts      # シフトタイプ定義
-│   └── ShiftAssignment.ts # シフト割り当て
-├── constraints/      # 制約定義
-│   ├── types.ts          # 制約の型定義
-│   ├── hardConstraints.ts # ハード制約（必須）
-│   └── softConstraints.ts # ソフト制約（最適化目標）
-├── solver/           # ソルバー実装
-│   ├── types.ts          # ソルバーインターフェース
-│   └── NaiveSolver.ts    # シンプルなヒューリスティック実装
-├── examples/         # サンプル実装
-│   └── smallFacilityExample.ts
-└── index.ts          # エントリーポイント
-```
-
-## ドメインモデル
-
-### ShiftType（シフトタイプ）
-
-日本の介護施設で一般的なシフトパターン：
-
-- **早番** (EARLY): 07:00-16:00
-- **日勤A** (DAY_A): 08:30-17:30
-- **日勤B** (DAY_B): 09:00-18:00
-- **遅番** (LATE): 11:00-20:00
-- **夜勤入り** (NIGHT_START): 16:00-翌10:00 (16時間)
-- **夜勤明け** (NIGHT_END): 10:00-12:00 (引き継ぎ時間)
-- **休み** (OFF)
-
-### Employee（従業員）
-
-主な属性：
-- 基本情報: ID、名前、職種、雇用形態
-- スキル: 保有スキルのリスト
-- 勤務制限: 最大/最小シフト数、連続勤務日数、労働時間上限
-- 希望: 勤務希望、勤務不可日
-
-### Role（職種）
-
-- 介護福祉士 (CARE_WORKER)
-- 看護師 (NURSE)
-- ケアマネージャー (CARE_MANAGER)
-- 介護助手 (CARE_ASSISTANT)
-- 理学療法士 (PHYSICAL_THERAPIST)
-- 作業療法士 (OCCUPATIONAL_THERAPIST)
-- など
-
-## 制約
+## 制約詳細
 
 ### ハード制約（必ず満たすべき制約）
 
-1. **二重予約禁止**: 同じ従業員が同じ日に複数のシフトに入らない
+1. **二重予約禁止**: 同じ従業員が同じ日に複数のシフト（OFF以外）に入らない
 2. **夜勤明け後の勤務禁止**: 夜勤入りの翌日は他のシフトに入れない
 3. **勤務不可日の遵守**: 従業員が指定した勤務不可日には割り当てない
 4. **月間最大シフト数**: 従業員の月間最大シフト数を超えない
@@ -170,253 +345,88 @@ src/
 4. **長時間連続勤務の回避**: 連続勤務をなるべく短くする（推奨5日以下）
 5. **月間最小シフト数**: 従業員の月間最小シフト数を満たす
 
-## API インターフェース
-
-### 他システムからの呼び出し方法
-
-このライブラリは、外部システム（例: Webアプリケーション、REST API、バッチ処理など）から以下のように利用できます。
-
-#### パターン1: 簡易関数を使う
-
-```typescript
-import { generateSchedule, Employee } from 'welfare-shift-scheduler-core';
-
-// 従業員データ（JSONやDBから取得したデータ）
-const employees: Employee[] = await fetchEmployeesFromDatabase();
-
-// スケジュール生成
-const result = await generateSchedule({
-  yearMonth: '2025-01',
-  employees,
-});
-
-// 結果を保存
-await saveScheduleToDatabase(result.schedule);
-```
-
-#### パターン2: ソルバーを直接使う
-
-```typescript
-import {
-  NaiveSolver,
-  ScheduleGenerationRequest,
-  getAllHardConstraints,
-  getAllSoftConstraints,
-  STANDARD_SHIFT_TYPES,
-} from 'welfare-shift-scheduler-core';
-
-const solver = new NaiveSolver();
-
-const request: ScheduleGenerationRequest = {
-  yearMonth: '2025-01',
-  employees: employees,
-  shiftTypes: Object.values(STANDARD_SHIFT_TYPES),
-  hardConstraints: getAllHardConstraints(),
-  softConstraints: getAllSoftConstraints(),
-  staffingRequirements: customStaffingMap, // カスタム人員配置要件
-  timeoutMs: 60000,
-};
-
-const result = await solver.generateSchedule(request);
-```
-
-#### パターン3: REST APIとしてラップする例
-
-```typescript
-// Express.jsの例
-import express from 'express';
-import { generateSchedule, Employee } from 'welfare-shift-scheduler-core';
-
-const app = express();
-app.use(express.json());
-
-app.post('/api/schedules/generate', async (req, res) => {
-  try {
-    const { yearMonth, employees } = req.body;
-
-    const result = await generateSchedule({
-      yearMonth,
-      employees: employees as Employee[],
-    });
-
-    res.json({
-      success: result.success,
-      feasible: result.feasible,
-      schedule: result.schedule,
-      score: result.overallScore,
-      violations: result.totalViolations,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.listen(3000);
-```
-
-### 入力データ形式
-
-従業員データは以下のJSON形式で渡すことができます：
-
-```json
-{
-  "yearMonth": "2025-01",
-  "employees": [
-    {
-      "id": "E001",
-      "name": "佐藤 太郎",
-      "role": "CARE_WORKER",
-      "skills": ["CARE_SKILLS", "NIGHT_SHIFT_CAPABLE"],
-      "employmentType": "FULL_TIME",
-      "maxShiftsPerMonth": 22,
-      "minShiftsPerMonth": 20,
-      "maxNightShiftsPerMonth": 5,
-      "minNightShiftsPerMonth": 3,
-      "maxConsecutiveWorkDays": 6,
-      "maxWeeklyHours": 40,
-      "maxMonthlyHours": 180,
-      "preferences": [
-        {
-          "date": "2025-01-05",
-          "preferredShiftId": "OFF",
-          "priority": 3
-        }
-      ],
-      "unavailableDates": ["2025-01-15"]
-    }
-  ]
-}
-```
-
-### 出力データ形式
-
-```json
-{
-  "success": true,
-  "feasible": true,
-  "totalViolations": 2,
-  "overallScore": 85.5,
-  "schedule": {
-    "yearMonth": "2025-01",
-    "assignments": [
-      {
-        "employeeId": "E001",
-        "date": "2025-01-01",
-        "shiftTypeId": "DAY_A"
-      }
-    ],
-    "generatedAt": "2025-01-01T00:00:00.000Z",
-    "metadata": {
-      "generationTimeMs": 150
-    }
-  }
-}
-```
-
-## サンプル実行
+## 開発コマンド
 
 ```bash
-# 依存パッケージのインストール
-npm install
+# 開発サーバー（ホットリロード）
+npm run dev
 
-# サンプルプログラムの実行
+# ビルド
+npm run build
+
+# 本番サーバー起動
+npm start
+
+# テスト
+npm test
+
+# 型チェック
+npm run typecheck
+
+# Linter
+npm run lint
+
+# フォーマット
+npm run format
+
+# Seedデータ投入
+npm run seed
+
+# サンプルスクリプト実行
 npm run example
 ```
 
-サンプル出力：
-```
-============================================================
-介護施設シフト自動生成エンジン - サンプル実行
-============================================================
+## Future Extensions（将来の拡張）
 
-従業員数: 6名
-  - 佐藤 太郎 (CARE_WORKER) [FULL_TIME]
-  - 鈴木 花子 (NURSE) [FULL_TIME]
-  ...
+### 短期（Phase 3）
+- [ ] PostgreSQL データベース連携
+- [ ] 従業員・スケジュールの永続化
+- [ ] ページネーション機能
+- [ ] フィルタリング・ソート機能
+- [ ] より詳細なログ出力
 
-シフトタイプ数: 7種類
-  - 早番 (07:00-16:00, 必要人数: 2)
-  - 日勤A (08:30-17:30, 必要人数: 3)
-  ...
+### 中期（Phase 4）
+- [ ] OR-Tools 統合による高度な最適化
+- [ ] 複数施設の管理
+- [ ] シフト変更リクエスト機能
+- [ ] Webフロントエンド（React）
+- [ ] 認証・認可（JWT）
+- [ ] リアルタイム通知
 
-生成結果
-============================================================
-成功: はい
-実行可能: はい（ハード制約を満たす）
-違反数: 5
-満足度スコア: 82.45点
-生成時間: 127ms
-```
+### 長期（Phase 5+）
+- [ ] 機械学習によるシフト需要予測
+- [ ] モバイルアプリ（React Native）
+- [ ] 勤務実績との比較分析
+- [ ] レポート・ダッシュボード機能
+- [ ] カレンダー連携（Google Calendar等）
+- [ ] マルチテナント対応
 
-## 拡張性
+## Troubleshooting
 
-### カスタムソルバーの実装
+### ポート3000が既に使用されている
 
-将来的にOR-ToolsやGoogle OR-Toolsなどの高度な制約ソルバーを統合する場合：
+```bash
+# .envファイルでポートを変更
+PORT=3001
 
-```typescript
-import { Solver, ScheduleGenerationRequest, ScheduleGenerationResult } from 'welfare-shift-scheduler-core';
-
-class ORToolsSolver implements Solver {
-  getName(): string {
-    return 'ORToolsSolver';
-  }
-
-  async generateSchedule(request: ScheduleGenerationRequest): Promise<ScheduleGenerationResult> {
-    // OR-Toolsを使った実装
-    // ...
-  }
-}
+# または環境変数で指定
+PORT=3001 npm run dev
 ```
 
-### カスタム制約の追加
+### Dockerコンテナが起動しない
 
-```typescript
-import { Constraint, ConstraintEvaluationResult, Schedule, Employee } from 'welfare-shift-scheduler-core';
+```bash
+# ログを確認
+docker compose logs
 
-class CustomConstraint implements Constraint {
-  id = 'CUSTOM_CONSTRAINT';
-  name = 'カスタム制約';
-  description = 'カスタム制約の説明';
-  type: 'HARD' | 'SOFT' = 'SOFT';
-
-  evaluate(schedule: Schedule, employees: Employee[]): ConstraintEvaluationResult {
-    // カスタムロジック
-    return {
-      satisfied: true,
-      violations: [],
-      score: 100,
-    };
-  }
-}
+# コンテナを再ビルド
+docker compose down
+docker compose up --build
 ```
 
 ## ライセンス
 
 MIT
-
-## 開発
-
-```bash
-# ビルド
-npm run build
-
-# 開発モード
-npm run dev
-
-# サンプル実行
-npm run example
-```
-
-## ロードマップ
-
-- [ ] OR-Tools統合
-- [ ] PostgreSQLデータベース連携
-- [ ] より高度な最適化アルゴリズム
-- [ ] Webインターフェース
-- [ ] 多施設対応
-- [ ] シフト変更リクエスト機能
-- [ ] 勤務実績との比較分析
 
 ## コントリビューション
 
